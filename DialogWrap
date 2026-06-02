@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+
+# === Wrappers for Zenity/kDialog ===
+progress() {
+    case "$DIALOG_BACKEND" in
+        kdialog)
+            DBUS_REF=$(kdialog \
+                --title "Ultimate Bun Builder" \
+                --progressbar "$1" 0)
+
+            "$QDBUS" $DBUS_REF showCancelButton false
+            sleep 0.5
+            ;;
+        zenity)
+            (
+                echo "0"
+                echo "$1"
+                while true; do
+                    sleep 1
+                done
+            ) | zenity \
+                --progress \
+                --title="Ultimate Bun Builder" \
+                --text="$1" \
+                --pulsate \
+                --auto-close \
+                --no-cancel &
+            ZENITY_PID=$!
+            ;;
+    esac
+}
+
+close_progress() {
+    case "$DIALOG_BACKEND" in
+        kdialog)
+            "$QDBUS" $DBUS_REF close
+            ;;
+        zenity)
+            [ -n "$ZENITY_PID" ] && kill "$ZENITY_PID"
+            ;;
+    esac
+}
+
+notify() {
+    case "$DIALOG_BACKEND" in
+        kdialog)
+            kdialog --title "Ultimate Bun Builder" \
+                    --passivepopup "$1" 5
+            ;;
+        zenity)
+            zenity --notification \
+                   --text="$1" 2>/dev/null &
+            ;;
+    esac
+
+    echo "$1"
+}
+
+error() {
+    case "$DIALOG_BACKEND" in
+        kdialog)
+            kdialog --title "Ultimate Bun Builder" \
+                    --error "$1"
+            ;;
+        zenity)
+            zenity --error \
+                   --text="$1" 2>/dev/null &
+            ;;
+    esac
+
+    echo "Error: $1"
+}
+
+confirm() {
+    case "$DIALOG_BACKEND" in
+        kdialog)
+            kdialog --title "Ultimate Bun Builder" \
+                    --yesno "$1"
+            return $?
+            ;;
+        zenity)
+            zenity --info \
+                   --title="Ultimate Bun Builder" \
+                   --text="$1"
+            return $?
+            ;;
+        *)
+            echo "$1"
+            read -p "Press Enter to continue, or Ctrl+C to cancel..."
+            return 0
+            ;;
+    esac
+}

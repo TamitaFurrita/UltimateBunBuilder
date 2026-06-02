@@ -1,0 +1,10 @@
+# Dummy desktop file
+
+[Desktop Entry]
+Name=Ultimate Bun Builder - Online
+Exec=echo
+Terminal=true
+Type=Application
+Icon=buncord
+NoDisplay=true
+Categories=Development;

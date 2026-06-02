@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+
+export __﻿GL_MaxFramesAllowed="1" # Fuck NVIDIA
+
+export HERE="$(dirname "$(readlink -f "${0}")")"
+export WINEDEBUG=-all
+
+source "$HERE/DialogWrap"
+
+export LATEST_VERSION=$(curl -s https://api.github.com/repos/Kron4ek/Wine-Builds/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+
+export VARDIR="${HOME}/.var/"
+export WINEDIR="$VARDIR/wine-${LATEST_VERSION}-staging-amd64-wow64"
+export WINEPREFIX="${HOME}/.ultimatebunbuilder/"
+
+export UDB="${WINEPREFIX}/drive_c/users/Public/UltimateDoomBuilder/Builder.exe"
+
+# === Initializing these for later ===
+DBUS_REF=""
+ZENITY_PID=""
+QDBUS="qdbus"
+
+# === Dialog backend detection ===
+DIALOG_BACKEND="none"
+
+if command -v kdialog >/dev/null 2>&1; then
+    DIALOG_BACKEND="kdialog"
+    echo "Found kdialog"
+elif command -v zenity >/dev/null 2>&1; then
+    DIALOG_BACKEND="zenity"
+    echo "Found zenity"
+fi
+
+# === Check qdbus binary name ===
+if command -v qdbus-qt6 >/dev/null 2>&1; then
+    QDBUS=qdbus-qt6
+    echo "$QDBUS"
+elif command -v qdbus >/dev/null 2>&1; then
+    QDBUS=qdbus
+    echo "$QDBUS"
+elif command -v qdbus6 >/dev/null 2>&1; then
+    QDBUS=qdbus6
+    echo "$QDBUS"
+else
+    error "qDBus not found. This is normal for GNOME-based DEs." >&2
+fi
+
+# === First-time user dialog ===
+if [ ! -f "${WINEPREFIX}/.first_run_done" ]; then
+    if ! confirm \
+"Welcome to the online build of Tamara Mochaccina's Ultimate Bun Builder!
+
+This AppImage will create a Wine prefix with .NET 4.7.2 for you, and
+subsequently launch Ultimate Doom Builder R4317 on Wine-Staging ${LATEST_VERSION}.
+
+WARNING: This process will eat up 2.4 gigabytes of storage on your device.
+Blame Microslop.
+
+Confirm to continue."; then
+        echo "User canceled first-time setup."
+        exit 0
+    fi
+fi
+
+echo "\
+                                                          ██████
+                                                      ███████████
+                                                    ███████████ ███████
+ Tamara Mochaccina's                             █████████████ █████████
+ Ultimate Doom Builder AppImage                 █████████████ ████████████
+                                                ████████████ ██████████████
+ Based on                                       ███████████ ███████████████
+ https://github.com/Kron4ek/Wine-Builds/       ███████████ ████████████████
+ Ultimate Doom Builder R4317                   ███████████ ████████████████
+                                              ███████████ ████████████████
+ Icon drawn by                                ██████████ █████████████████
+ https://ko-fi.com/siphernil                 ███████████ █████████████████
+                                             ██████████ █████████████████
+                                            ██████████  ████████████████
+                                            █████████   ███████████████
+                                        ██████████████████████████████
+                                     ████████████████████████████████
+                                   ████████████████████████████████
+                                █████████████████████████████████
+                               █████████████████████████████████
+                            █████████████████████████████████████
+                          ████████████████████████████████████████
+                         ███████████████      █████████████████████
+                           ████████████        █████████████████████
+                          █████████████        ████████████████████
+                          ██████████████      █████████████████████
+                           ███████████████████████████████████████
+                            ████████████████████████████████████
+                              █████████████████████████████████
+                                      ███████████████████████
+                                        ████████████████████
+                                        ███████████████████
+                                       █████████████████
+                                       ██████████████
+                                          ███████                                                   "
+
+# === Downloading Kron4ek's Wine build (Latest Staging) ===
+if [ ! -d "$WINEDIR" ]; then
+    progress "Fetching latest Wine-Staging version..."
+
+    if [ -z "$LATEST_VERSION" ]; then
+        confirm "Could not fetch latest Wine version.
+
+        This usually happens because curl isn't working, or missing."
+        exit 1
+    fi
+
+    TARBALL="wine-${LATEST_VERSION}-staging-amd64-wow64.tar.xz"
+    DOWNLOAD_URL="https://github.com/Kron4ek/Wine-Builds/releases/download/${LATEST_VERSION}/${TARBALL}"
+
+    close_progress
+
+    progress "Downloading Wine ${LATEST_VERSION} (Staging + WoW64)..."
+
+    wget -P "$VARDIR" "$DOWNLOAD_URL"
+
+    tar -xf "$VARDIR/$TARBALL" -C "$VARDIR"
+    rm "$VARDIR/"*.tar.xz* 2>/dev/null
+
+    close_progress
+fi
+
+# === Wine prefix initialization ===
+if [ ! -d "$WINEPREFIX" ]; then
+    echo "Initializing Wine prefix for the first time..."
+
+    progress "Initializing Wine prefix..."
+
+    tar -xf "${HERE}/ultimatebunbuilder.tar.xz" -C "${HOME}"
+
+    bash -c "/usr/bin/wineboot -i; /usr/bin/wineserver -k"
+
+    close_progress
+
+    touch "${WINEPREFIX}/.first_run_done"
+fi
+
+export WINE="${WINEDIR}/bin/wine"
+
+# === Run requested commands ===
+if [ "$1" = "winetricks" ]; then
+    notify "Running bundled Winetricks..."
+    exec "${HERE}/bin/winetricks" "${@:2}"
+
+elif [ $# -eq 0 ]; then
+    notify "Launching Ultimate Doom Builder..."
+    exec "$WINE" "$UDB"
+
+else
+    notify "Running $1..."
+    exec "$WINE" "$@"
+fi
