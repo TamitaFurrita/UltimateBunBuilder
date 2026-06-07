@@ -7,7 +7,7 @@ export WINEDEBUG=-all
 
 source "$HERE/DialogWrap"
 
-export LATEST_VERSION=$(curl -s https://api.github.com/repos/Kron4ek/Wine-Builds/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+export LATEST_VERSION="11.10"
 
 export VARDIR="${HOME}/.var/"
 export WINEDIR="$VARDIR/wine-${LATEST_VERSION}-staging-amd64-wow64"
@@ -110,8 +110,7 @@ if [ ! -d "$WINEDIR" ]; then
         exit 1
     fi
 
-    TARBALL="wine-${LATEST_VERSION}-staging-amd64-wow64.tar.xz"
-    DOWNLOAD_URL="https://github.com/Kron4ek/Wine-Builds/releases/download/${LATEST_VERSION}/${TARBALL}"
+    DOWNLOAD_URL="https://github.com/Kron4ek/Wine-Builds/releases/download/11.10/wine-11.10-staging-amd64-wow64.tar.xz"
 
     close_progress
 
