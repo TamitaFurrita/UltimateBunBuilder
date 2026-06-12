@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+cleanup_dialogs() {
+    close_progress
+    error "You might want to report this crash."
+}
+
 # === Wrappers for Zenity/kDialog ===
 progress() {
     case "$DIALOG_BACKEND" in
@@ -86,8 +91,12 @@ confirm() {
             ;;
         *)
             echo "$1"
-            read -p "Press Enter to continue, or Ctrl+C to cancel..."
-            return 0
+            read -p "Press [Y]es/Enter to continue, or [N]o/Ctrl+C to cancel..." selection
+            case "${selection^^}" in # Convert to uppercase for easier comparison
+                YES|Y) return 0 ;;
+                NO|N|"") return 1 ;; # If user presses Enter, treat it as success (or adjust this logic)
+                *) return 2 ;;      # Handle other input if necessary
+            esac
             ;;
     esac
 }
