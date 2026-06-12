@@ -1,52 +1,89 @@
 #!/usr/bin/env bash
 
-export __﻿GL_MaxFramesAllowed="1" # Fuck NVIDIA
+# ========================================================
+# GLOBAL CONFIGURATION AND SAFETY CHECKS
+# ========================================================
 
-export HERE="$(dirname "$(readlink -f "${0}")")"
+set -eo pipefail
+
+# Set environment flags
+export __GL_MaxFramesAllowed="1" # Fuck NVIDIA
 export WINEDEBUG=-all
+export HERE="$(dirname "$(readlink -f "${0}")")"
 
-source "$HERE/DialogWrap"
+# Dialog wrapper
+source "$HERE/DialogWrap" || { echo "Error: Could not source DialogWrap. Exiting."; exit 1; }
+trap 'cleanup_dialogs' EXIT SIGINT SIGHUP
 
-export LATEST_VERSION="11.10"
-
-export VARDIR="${HOME}/.var/"
-export WINEDIR="$VARDIR/wine-${LATEST_VERSION}-staging-amd64-wow64"
 export WINEPREFIX="${HOME}/.ultimatebunbuilder/"
 
-export UDB="${WINEPREFIX}/drive_c/users/Public/UltimateDoomBuilder/Builder.exe"
+# Placeholder: Logging function for general information
+info() {
+    echo -e "\n[INFO] $*"
+}
 
-# === Initializing these for later ===
-DBUS_REF=""
-ZENITY_PID=""
-QDBUS="qdbus"
+# ========================================================
+# VARIABLE DEFINITIONS (Constants)
+# ========================================================
 
-# === Dialog backend detection ===
-DIALOG_BACKEND="none"
+LATEST_VERSION="11.10"
+VARDIR="${HOME}/.var/"
+WINEDIR="$VARDIR/wine-${LATEST_VERSION}-staging-amd64-wow64"
+UDB="${WINEPREFIX}/drive_c/users/Public/UltimateDoomBuilder/Builder.exe"
 
-if command -v kdialog >/dev/null 2>&1; then
-    DIALOG_BACKEND="kdialog"
-    echo "Found kdialog"
-elif command -v zenity >/dev/null 2>&1; then
-    DIALOG_BACKEND="zenity"
-    echo "Found zenity"
-fi
+# Initialize placeholders for detection
+QDBUS="qdbus" # Default fallback
 
-# === Check qdbus binary name ===
-if command -v qdbus-qt6 >/dev/null 2>&1; then
-    QDBUS=qdbus-qt6
-    echo "$QDBUS"
-elif command -v qdbus >/dev/null 2>&1; then
-    QDBUS=qdbus
-    echo "$QDBUS"
-elif command -v qdbus6 >/dev/null 2>&1; then
-    QDBUS=qdbus6
-    echo "$QDBUS"
-else
-    error "qDBus not found. This is normal for GNOME-based DEs." >&2
-fi
+# ========================================================
+# PHASE 1: ENVIRONMENT DETECTION
+# ========================================================
 
-# === First-time user dialog ===
-if [ ! -f "${WINEPREFIX}/.first_run_done" ]; then
+detect_dialog_backend() {
+    DIALOG_BACKEND="none"
+    if command -v kdialog >/dev/null 2>&1; then
+        DIALOG_BACKEND="kdialog"
+        info "Found kdialog."
+    elif command -v zenity >/dev/null 2>&1; then
+        DIALOG_BACKEND="zenity"
+        info "Found zenity."
+    else
+        info "Warning: Neither kdialog nor zenity found. This is kind of scary, but I presume you're running this in terminal."
+    fi
+}
+
+detect_qdbus() {
+    local qdbus_options=(
+        qdbus-qt6
+        qdbus
+        qdbus6
+    )
+
+    for candidate in "${qdbus_options[@]}"; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            QDBUS="$candidate"
+            info "Detected $QDBUS"
+            return 0 # Success
+        fi
+    done
+
+    # If loop finishes without returning, none were found.
+    info "qDBus not found. This is normal for GNOME-based DEs, but may limit functionality." >&2
+}
+
+# ========================================================
+# PHASE 2: CORE SETUP FUNCTIONS
+# ========================================================
+
+check_first_run() {
+    if [ -f "${WINEPREFIX}/.first_run_done" ]; then
+        info "First-time setup already completed."
+        return 0 # Already done
+    fi
+
+    echo "============================================================================"
+    echo "                Ultimate Doom Builder Setup Wizard"
+    echo "============================================================================"
+
     if ! confirm \
 "Welcome to the online build of Tamara Mochaccina's Ultimate Bun Builder!
 
@@ -58,9 +95,117 @@ Blame Microslop.
 
 Confirm to continue."; then
         echo "User canceled first-time setup."
-        exit 0
+        exit 0 # Explicitly exit if user cancels
     fi
-fi
+}
+
+download_wine_staging() {
+    if [[ -d "$WINEDIR" ]]; then
+        info "Wine staging directory already exists. Skipping download phase."
+        return 0
+    fi
+
+    local DOWNLOAD_URL="https://github.com/Kron4ek/Wine-Builds/releases/download/${LATEST_VERSION}/wine-${LATEST_VERSION}-staging-amd64-wow64.tar.xz"
+    # Use a temporary filename for the download
+    local TEMP_TARBALL="$VARDIR/wine_temp_download.tar.xz"
+
+    info "Starting Wine staging setup..."
+    progress "Downloading required wine build (${LATEST_VERSION})..."
+
+    if ! wget -q --show-progress "$DOWNLOAD_URL" -O "$TEMP_TARBALL"; then
+        error "Failed to download the wine staging archive from Github."
+        return 1
+    fi
+
+    close_progress
+    info "Extracting Wine files..."
+
+    # Extract and clean up
+    if ! tar -xf "$TEMP_TARBALL" -C "$VARDIR"; then
+        error "Failed to extract Wine staging archive contents."
+        rm -f "$TEMP_TARBALL" # Clean up even if extraction failed
+        return 1
+    fi
+
+    # Final cleanup of the temporary file
+    rm "$TEMP_TARBALL" 2>/dev/null || true
+    info "Wine download and extraction successful."
+    return 0
+}
+
+
+init_wineprefix() {
+    if [[ -d "$WINEPREFIX" ]]; then
+        info "Wine prefix already exists at $WINEPREFIX. Skipping initialization."
+        return 0
+    fi
+
+    info "Initializing Wine prefix for the first time..."
+    progress "Setting up environment and installing necessary components..."
+
+    # Step 1: Extract AppImage contents into home directory
+    if ! tar -xf "${HERE}/ultimatebunbuilder.tar.xz" -C "${HOME}"; then
+        error "Failed to extract core Ultimate Doom Builder files."
+        return 1
+    fi
+
+    # Step 2: Run initial wine commands (Needs careful sequential execution)
+    local WINE_COMMANDS="/usr/bin/wineboot -i; /usr/bin/wineserver -k"
+    if ! bash -c "$WINE_COMMANDS"; then
+        error "Failed to run mandatory wine setup commands. Check Wine installation."
+        return 1
+    fi
+
+    close_progress
+    touch "${WINEPREFIX}/.first_run_done"
+    info "Wine prefix initialization complete."
+    return 0
+}
+
+# ========================================================
+# PHASE 3: MAIN EXECUTION FLOW
+# ========================================================
+
+main() {
+    # 1. Setup Environment Variables and Detect Dependencies
+    detect_dialog_backend
+    detect_qdbus
+
+    # 2. Run Pre-Flight Check
+    check_first_run
+
+    # 3. Download Wine (Critical step, must happen before WINE is set)
+    if ! download_wine_staging; then
+        exit 1
+    fi
+
+    # Set the definitive path to the wine executable only after successful setup
+    export WINE="${WINEDIR}/bin/wine"
+
+    # 4. Initialize Wine Prefix
+    if ! init_wineprefix; then
+        exit 1
+    fi
+
+
+    # 5. Execute Requested Commands
+    echo "============================================================================"
+    info "Execution Phase Started."
+
+    if [ "$1" = "winetricks" ]; then
+            notify "Running bundled Winetricks..."
+            exec "${HERE}/bin/winetricks" "${@:2}"
+        elif [ $# -eq 0 ]; then
+            notify "Launching Ultimate Doom Builder..."
+            exec "$WINE" "$UDB"
+        else
+            info "Executing custom command using Wine..."
+            notify "Running $1..."
+            exec "$WINE" "$@"
+    fi
+}
+
+# The actual runner
 
 echo "\
                                                           ██████
@@ -99,58 +244,4 @@ echo "\
                                        ██████████████
                                           ███████                                                   "
 
-# === Downloading Kron4ek's Wine build (Latest Staging) ===
-if [ ! -d "$WINEDIR" ]; then
-    progress "Fetching latest Wine-Staging version..."
-
-    if [ -z "$LATEST_VERSION" ]; then
-        confirm "Could not fetch latest Wine version.
-
-        This usually happens because curl isn't working, or missing."
-        exit 1
-    fi
-
-    DOWNLOAD_URL="https://github.com/Kron4ek/Wine-Builds/releases/download/11.10/wine-11.10-staging-amd64-wow64.tar.xz"
-
-    close_progress
-
-    progress "Downloading Wine ${LATEST_VERSION} (Staging + WoW64)..."
-
-    wget -P "$VARDIR" "$DOWNLOAD_URL"
-
-    tar -xf "$VARDIR/$TARBALL" -C "$VARDIR"
-    rm "$VARDIR/"*.tar.xz* 2>/dev/null
-
-    close_progress
-fi
-
-# === Wine prefix initialization ===
-if [ ! -d "$WINEPREFIX" ]; then
-    echo "Initializing Wine prefix for the first time..."
-
-    progress "Initializing Wine prefix..."
-
-    tar -xf "${HERE}/ultimatebunbuilder.tar.xz" -C "${HOME}"
-
-    bash -c "/usr/bin/wineboot -i; /usr/bin/wineserver -k"
-
-    close_progress
-
-    touch "${WINEPREFIX}/.first_run_done"
-fi
-
-export WINE="${WINEDIR}/bin/wine"
-
-# === Run requested commands ===
-if [ "$1" = "winetricks" ]; then
-    notify "Running bundled Winetricks..."
-    exec "${HERE}/bin/winetricks" "${@:2}"
-
-elif [ $# -eq 0 ]; then
-    notify "Launching Ultimate Doom Builder..."
-    exec "$WINE" "$UDB"
-
-else
-    notify "Running $1..."
-    exec "$WINE" "$@"
-fi
+main "$@"
