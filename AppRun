@@ -8,6 +8,7 @@ set -eo pipefail
 
 # Set environment flags
 export __GL_MaxFramesAllowed="1" # Fuck NVIDIA
+export vblank_mode="0" # Apparently, some AMD hardware has the same issues. Fuck NVIDIA though.
 export WINEDEBUG=-all
 export HERE="$(dirname "$(readlink -f "${0}")")"
 
@@ -25,9 +26,8 @@ info() {
 # VARIABLE DEFINITIONS (Constants)
 # ========================================================
 
-LATEST_VERSION="11.10"
 VARDIR="${HOME}/.var/"
-WINEDIR="$VARDIR/wine-${LATEST_VERSION}-staging-amd64-wow64"
+WINEDIR="$VARDIR/wine-11.10-staging-amd64-wow64"
 UDB="${WINEPREFIX}/drive_c/users/Public/UltimateDoomBuilder/Builder.exe"
 
 # Initialize placeholders for detection
@@ -87,7 +87,7 @@ check_first_run() {
 "Welcome to the online build of Tamara Mochaccina's Ultimate Bun Builder!
 
 This AppImage will create a Wine prefix with .NET 4.7.2 for you, and
-subsequently launch Ultimate Doom Builder R4317 on Wine-Staging ${LATEST_VERSION}.
+subsequently launch Ultimate Doom Builder R4317 on Wine-Staging 11.10.
 
 WARNING: This process will eat up 2.4 gigabytes of storage on your device.
 Blame Microslop.
@@ -104,12 +104,12 @@ download_wine_staging() {
 		return 0
 	fi
 
-	local DOWNLOAD_URL="https://github.com/Kron4ek/Wine-Builds/releases/download/${LATEST_VERSION}/wine-${LATEST_VERSION}-staging-amd64-wow64.tar.xz"
+	local DOWNLOAD_URL="https://github.com/Kron4ek/Wine-Builds/releases/download/11.10/wine-11.10-staging-amd64-wow64.tar.xz"
 	# Use a temporary filename for the download
 	local TEMP_TARBALL="$VARDIR/wine_temp_download.tar.xz"
 
 	info "Starting Wine staging setup..."
-	progress "Downloading required wine build (${LATEST_VERSION})..."
+	progress "Downloading required wine build (11.10)..."
 
 	if ! wget -q --show-progress "$DOWNLOAD_URL" -O "$TEMP_TARBALL"; then
 		error "Failed to download the wine staging archive from Github."
@@ -198,9 +198,16 @@ main() {
 	if [ "$1" = "winetricks" ]; then
 			notify "Running bundled Winetricks..."
 			exec "${HERE}/bin/winetricks" "${@:2}"
+
+		elif [ "$1" = "--update" ]; then
+			notify "Updating Ultimate Doom Builder..."
+			cd "${WINEPREFIX}/drive_c/users/Public/UltimateDoomBuilder/"
+			exec "$WINE" "./Updater.exe"
+
 		elif [ $# -eq 0 ]; then
 			notify "Launching Ultimate Doom Builder..."
 			exec "$WINE" "$UDB"
+
 		else
 			info "Executing custom command using Wine..."
 			notify "Running $1..."
