@@ -10,7 +10,8 @@ set -eo pipefail
 export __GL_MaxFramesAllowed="1" # Fuck NVIDIA
 export vblank_mode="0" # Apparently, some AMD hardware has the same issues. Fuck NVIDIA though.
 export WINEDEBUG=-all
-export HERE="$(dirname "$(readlink -f "${0}")")"
+HERE="$(dirname "$(readlink -f "${0}")")"
+export HERE
 
 # Dialog wrapper
 source "$HERE/DialogWrap" || { echo "Error: Could not source DialogWrap. Exiting."; exit 1; }

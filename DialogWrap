@@ -93,8 +93,8 @@ confirm() {
             echo "$1"
             read -p "Press [Y]es/Enter to continue, or [N]o/Ctrl+C to cancel..." selection
             case "${selection^^}" in # Convert to uppercase for easier comparison
-                YES|Y) return 0 ;;
-                NO|N|"") return 1 ;; # If user presses Enter, treat it as success (or adjust this logic)
+                YES|Y|"") return 0 ;; # If user presses Enter, treat it as success (or adjust this logic)
+                NO|N) return 1 ;;
                 *) return 2 ;;      # Handle other input if necessary
             esac
             ;;
