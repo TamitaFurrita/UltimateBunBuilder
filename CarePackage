@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+
+# ========================================================
+# VARIABLE DEFINITIONS (Constants)
+# ========================================================
+
+VARDIR="${HOME}/.var/"
+
+# ========================================================
+# CONFIRMATION DIALOG
+# ========================================================
+
+confirm() {
+            echo "$1"
+            read -p "Press [Y]es/Enter to continue, or [N]o/Ctrl+C to cancel...
+            " selection
+            case "${selection^^}" in # Convert to uppercase for easier comparison
+                YES|Y|"") return 0 ;;
+                NO|N) return 1 ;;
+                *) return 2 ;;      # Handle other input if necessary
+            esac
+}
+
+crisp() {
+	if ! confirm "Acquiring Crispy Doom Flatpak..." ; then
+			return 0
+			echo "Skipped acquiring Crispy Doom."
+			fi
+
+	if flatpak install --user -y flathub io.github.fabiangreffrath.Doom; then
+		flatpak override --user --filesystem=home io.github.fabiangreffrath.Doom
+		echo "Acquired Crispy Flatpak!"
+	else
+		echo "Error: Failed to install Crispy Doom via Flatpak."
+		return 1
+	fi
+}
+
+# ========================================================
+# UZDOOM + WOOF DOWNLOAD
+# ========================================================
+
+download() {
+local repo_options=(
+		UZDoom/UZDoom
+#		fabiangreffrath/crispy-doom
+		fabiangreffrath/woof
+	)
+
+	for candidate in "${repo_options[@]}"; do
+
+		REPO=$candidate
+		if ! confirm "Acquiring $candidate..." ; then
+			echo "Skipped acquiring $candidate."
+			continue
+			fi
+
+			local URL=$(curl -s https://api.github.com/repos/$candidate/releases/latest | grep "browser_download_url" | grep ".AppImage" | grep -v "zsync" | sed 's/.*"\(.*\)".*/\1/') # cool set of pipes right
+
+			local NAME=$(echo $URL | sed 's|.*/||')
+
+		if [ -n "$URL" ]; then
+			echo "Downloading $NAME..."
+			curl -LJO "$URL"
+
+			if [ -f "$NAME" ]; then
+				echo "$candidate acquired."
+				chmod +x "$NAME"
+				./"$NAME" --appimage-extract
+
+				if [ -d "squashfs-root" ]; then
+					local DIRNAME=$(echo "$NAME" | sed 's/.AppImage//g')
+					mv squashfs-root "$DIRNAME"
+					echo "$candidate extracted to $VARDIR/$DIRNAME."
+					mkdir "$HOME/Games"
+					mkdir "$HOME/.local/share/games/doom"
+
+					ln -s "$VARDIR/$DIRNAME/AppRun" "$HOME/Games/$DIRNAME.exe"
+				else
+					echo "Error: Extraction failed for $candidate."
+				fi
+			else
+				echo "Error: Download failed for $candidate."
+			fi
+
+		else
+			echo "Error: Could not find a valid download for $candidate."
+		fi
+	rm ./$NAME
+	done
+}
+
+# ========================================================
+# MAIN
+# ========================================================
+
+main() {
+
+flatpak --user remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+download
+
+if flatpak list --user --app=io.github.fabiangreffrath.Doom >/dev/null 2>&1; then
+	crisp
+	else echo "User already has Crispy Doom installed."
+	fi
+
+	echo "flatpak run io.github.fabiangreffrath.Doom \$@" > "$HOME/Games/CrispyDoom.exe"
+	chmod +x "$HOME/Games/CrispyDoom.exe"
+
+	ln -s "$VARDIR/$DIRNAME/usr/share/games/uzdoom/uzdoom.pk3" "$HOME/.local/share/games/doom/uzdoom.pk3"
+}
+
+# ========================================================
+# RUNNING TIME
+# ========================================================
+
+if [ ! -d "$VARDIR" ]; then
+    mkdir -p "$VARDIR"
+fi
+
+cd "$VARDIR" || { echo "Error: Could not access $VARDIR"; exit 1; }
+
+main
+echo "This script added a user-level Flathub remote. If you find this inconvenient, run the following command:
+
+flatpak --user remote-delete flathub"

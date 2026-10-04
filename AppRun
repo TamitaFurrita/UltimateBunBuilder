@@ -209,6 +209,10 @@ main() {
 			notify "Launching Ultimate Doom Builder..."
 			exec "$WINE" "$UDB"
 
+		elif [ "$1" = "--package" ]; then
+			notify "Running the Bunny Care Package..."
+			exec "${HERE}/CarePackage"
+
 		else
 			info "Executing custom command using Wine..."
 			notify "Running $1..."
