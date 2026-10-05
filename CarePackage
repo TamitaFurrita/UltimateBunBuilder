@@ -30,6 +30,8 @@ crisp() {
 	if flatpak install --user -y flathub io.github.fabiangreffrath.Doom; then
 		flatpak override --user --filesystem=home io.github.fabiangreffrath.Doom
 		echo "Acquired Crispy Flatpak!"
+			echo "flatpak run io.github.fabiangreffrath.Doom \$@" > "$HOME/Games/CrispyDoom.exe"
+			chmod +x "$HOME/Games/CrispyDoom.exe"
 	else
 		echo "Error: Failed to install Crispy Doom via Flatpak."
 		return 1
@@ -104,9 +106,6 @@ if flatpak list --user --app=io.github.fabiangreffrath.Doom >/dev/null 2>&1; the
 	crisp
 	else echo "User already has Crispy Doom installed."
 	fi
-
-	echo "flatpak run io.github.fabiangreffrath.Doom \$@" > "$HOME/Games/CrispyDoom.exe"
-	chmod +x "$HOME/Games/CrispyDoom.exe"
 
 	ln -s "$VARDIR/$DIRNAME/usr/share/games/uzdoom/uzdoom.pk3" "$HOME/.local/share/games/doom/uzdoom.pk3"
 }
