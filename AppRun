@@ -213,6 +213,11 @@ main() {
 			notify "Running the Bunny Care Package..."
 			exec "${HERE}/CarePackage"
 
+
+		elif [ "$1" = "--paths" ]; then
+			notify "Setting UDB to use Linux paths..."
+			exec "${HERE}/LinuxPathDoer"
+
 		else
 			info "Executing custom command using Wine..."
 			notify "Running $1..."

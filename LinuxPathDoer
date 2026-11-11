@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+sed -i 's/testlinuxpaths = false;/testlinuxpaths = true;/g' "$HOME/.ultimatebunbuilder/drive_c/users/$USER/AppData/Local/Doom Builder/UDBuilder.cfg"
+sed -i 's/testshortpaths = true;/testshortpaths = false;/g' "$HOME/.ultimatebunbuilder/drive_c/users/$USER/AppData/Local/Doom Builder/UDBuilder.cfg"
+sed -i 's/customparameters = false;/customparameters = true;/g' "$HOME/.ultimatebunbuilder/drive_c/users/$USER/AppData/Local/Doom Builder/UDBuilder.cfg"
